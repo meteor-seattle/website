@@ -1,9 +1,9 @@
 Meteor.startup(function() {
   if(Meteor.isClient) {
     SEO.config({
-      title: 'Meteor LA',
+      title: Meteor.settings.public.meetup.group_name,
       meta: {
-        'description': 'Meteor.js Meetups in Las Angeles, CA'
+        'description': Meteor.settings.public.meetup.group_info
       },
       og: {
         'image': Meteor.absoluteUrl('share-image.png')

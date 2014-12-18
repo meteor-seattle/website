@@ -24,14 +24,14 @@ Meteor.methods({
 		}
 	},
 
-	fetchProfiles: function() {
-		//changed the end point from getMembers to getProfiles to utilize the returned "role" variable ( and "answers" variable ) - Abdul
-		//var adminIds = [54118672, 57771272, 32213572, 28932772, 87620262, 11527138, 8187187];
-
-		console.log ( "Fetching Meetup Member Profiles ");
+	fetchProfiles: function(offset) {
 		var adminRoles = ["Organizer", "Co-Organizer"];
 
-		Meteor.call('MeetupAPI', 'getProfiles', {"group_urlname": group_urlname, "fields":"other_services"}, function(err, response) {
+		offset = offset || 0;
+
+		console.log ( "Fetching Meetup Member Profiles offset", offset);
+
+		Meteor.call('MeetupAPI', 'getProfiles', {"offset": offset, "page": 200, "group_urlname": group_urlname, "fields":"other_services"}, function(err, response) {
 
 			for (var i = 0, l = response.meta.count; i < l; i++) {
 				var node = response.results[i];
@@ -55,15 +55,10 @@ Meteor.methods({
 					}
 				}
 
-				//console.log("member_id: ",  meetupUid);
-
 				var existingUser = Meteor.users.findOne({'profile.meetupId': meetupUid});
-
-
 				if (existingUser) {
 
 					userId = existingUser._id;
-					//console.log("User exists, updating: ", meetupUid);
 					Meteor.users.update({'profile.meetupId': meetupUid},
 						{ $set :
 							{
@@ -100,14 +95,15 @@ Meteor.methods({
 						Roles.addUsersToRoles(userId, ['admin']);
 					}
 				}
-
-
 			}
+			// we surely habe more than 200 profiles, get the next page
+			if(response.meta.count == 200)
+				Meteor.call("fetchProfiles", offset + 1);
+
 		});
 	},
 
 	fetchEvents: function(status) {
-
 		console.log ( "Fetching Meetup Events");
 		Meteor.call('MeetupAPI', 'getEvents', {"group_urlname": group_urlname, "status": status, "fields":"featured"}, function(err, response) {
 
@@ -176,35 +172,21 @@ Meteor.methods({
 			}
 		});
 	},
-	
+
 	doRSVP : function(eventId) {
 		var user = Meteor.user();
 		if (!user)
 			throw new Meteor.Error(403, {'status':'error', 'code':'not-logged-in', 'errorTitle':'Not logged in', 'errorDesc':'You are not logged in to RSVP.'});
-			
+
 		// If user is not a member, let the client redirect the user to join page ?
 		if (!user.profile.meetupId) {
 			throw new Meteor.Error(403, {'status':'error', 'code':'not-a-member','errorTitle': 'Not a Member', 'errorDesc':'You are not a member of this group.'});
 		} else {
 			var meetupUserId = user.profile.meetupId;
-			
-			//Could not make this work..
-			// Meteor.call("MeetupAPI", "postRSVP", {'event_id' : eventId, 'rsvp' : 'yes', 'access_token': user.services["meetup"].accessToken}, function( err, response) {
-			// 	if(err) {
-			// 		console.log("Error: ",JSON.stringify(err));
-			// 		return err;
-			// 	} else {
-			// 		console.log("Success: ", JSON.stringify(response));
-			// 		return response;
-					
-			// 	}
-			// })
-			
-			//Instead using HTTP.call for RSVP post call
 			//Ref: http://www.meetup.com/meetup_api/auth/
 			HTTP.call("POST" , "https://api.meetup.com/2/rsvp/",
 				{
-					params: {'event_id' : eventId, 'rsvp' : 'yes', 'key':api_key}, 
+					params: {'event_id' : eventId, 'rsvp' : 'yes', 'key':api_key},
 					headers:{"Accept":"*/*", "User-Agent": "Meetup API lib for Node.js 0.1.3", "Authorization" : "bearer " + user.services["meetup"].accessToken}
 				},
         function(error, response) {
@@ -232,7 +214,7 @@ Meteor.methods({
         					});
         				}
         			}
-        
+
         		}
         	}
         }
